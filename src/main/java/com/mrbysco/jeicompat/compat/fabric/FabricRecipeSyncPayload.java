@@ -195,7 +195,7 @@ public record FabricRecipeSyncPayload(List<Entry> entries) implements CustomPack
 		 * {@code .release()} it). Used by the chunker to measure each entry's encoded size without
 		 * having to replicate {@link #write}.
 		 */
-		io.netty.buffer.ByteBuf encodeToBuffer(net.minecraft.server.MinecraftServer server) {
+		public io.netty.buffer.ByteBuf encodeToBuffer(net.minecraft.server.MinecraftServer server) {
 			io.netty.buffer.ByteBuf buf = io.netty.buffer.Unpooled.buffer();
 			RegistryFriendlyByteBuf wrapped = new RegistryFriendlyByteBuf(buf, server.registryAccess());
 			try {
