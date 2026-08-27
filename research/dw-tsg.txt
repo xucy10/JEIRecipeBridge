@@ -1,0 +1,89 @@
+﻿ Thread Safety Guidelines | PaperMC/Folia | DeepWiki Loading... Index your code with Devin DeepWiki DeepWiki PaperMC/Folia Index your code with Devin Edit Wiki Share Loading... Last indexed: 28 June 2026 ( 62dc0f ) Overview Project Architecture Installation & Setup Region Threading System Core Architecture Thread Safety and Ownership Region Lifecycle Data Isolation Chunk and Entity Management Task Scheduling Plugin Development Compatibility Requirements Scheduler APIs Thread Safety Guidelines Migration Guide Performance Monitoring Region Profiler TPS Monitoring Watchdog System Chunk System Metrics Building Folia Build Configuration Paperweight Patching System Build Scripts and Process Advanced Topics Block Update Thread Safety Login Concurrency Management Vehicle Position Synchronization Tile Entity Thread Safety Troubleshooting Glossary Menu Thread Safety Guidelines 
+Relevant source files 
+PATCHES-LICENSE 
+PROJECT_DESCRIPTION.md 
+README.md 
+REGION_LOGIC.md 
+folia-server/paper-patches/features/0001-Region-Threading-Base.patch 
+This page provides best practices and guidelines for plugin developers to write thread-safe code for Folia's region-threaded architecture. It focuses on practical patterns for avoiding data races, verifying thread ownership, and safely accessing shared data. 
+For information about the new scheduler APIs that route tasks to the correct threads, see page 3.2. For general plugin compatibility requirements and the folia-supported flag, see page 3.1. 
+Core Principles 
+Sources : README.md 109-147 
+Regions tick in parallel, not concurrently : Each region has its own isolated data and should never access data from another region. 
+Thread ownership must be verified : Always check thread ownership before accessing game state (entities, chunks, blocks). 
+Plugin data needs explicit synchronization : Folia only makes game state thread-safe; plugin data requires concurrent collections or synchronization. 
+Fail fast is preferred : Thread violations throw exceptions immediately to prevent subtle data corruption bugs. 
+Understanding Region Ownership 
+Sources : README.md 109-137 
+Each region exclusively owns specific game data and can only be accessed by the thread currently ticking that region: 
+Data Type Ownership Rule Entities Owned by region containing the entity's current chunk Chunks Owned by region managing those chunk coordinates Blocks Owned by region containing the block's chunk Tile Entities Owned by region containing the tile entity's chunk Players (ServerPlayer) Owned by region containing the player, or by global thread during login/config phases 
+Safe Access Radius 
+When handling an event (e.g., player breaks block), you can typically safely access data within approximately 8 chunks of the event source README.md 133-137 However, this is an approximation—always verify ownership using thread checks before accessing data outside the immediate event context. 
+Thread Ownership Verification APIs 
+Sources : folia-server/paper-patches/features/0001-Region-Threading-Base.patch 59-219 README.md 158-159 
+Always verify thread ownership before accessing game state. Folia provides two primary APIs for this: 
+Bukkit API (Recommended for Plugins) 
+The Bukkit API provides high-level methods to check if the current thread owns a specific game object. 
+TickThread Utility Methods 
+The ca.spottedleaf.moonrise.common.util.TickThread class provides detailed internal checks used by the server: 
+Method Purpose isTickThreadFor(Entity) Check if current thread owns entity folia-server/paper-patches/features/0001-Region-Threading-Base.patch 158-160 isTickThreadFor(Level, BlockPos) Check if current thread owns chunk containing block folia-server/paper-patches/features/0001-Region-Threading-Base.patch 59-62 isTickThreadFor(Level, ChunkPos) Check if current thread owns chunk folia-server/paper-patches/features/0001-Region-Threading-Base.patch 73-76 isTickThreadFor(Level, int chunkX, int chunkZ) Check if current thread owns chunk coordinates folia-server/paper-patches/features/0001-Region-Threading-Base.patch 83-91 isTickThreadFor(Level, AABB) Check if current thread owns all chunks in bounding box folia-server/paper-patches/features/0001-Region-Threading-Base.patch 93-100 ensureTickThread(Entity, String) Throw exception if thread doesn't own entity folia-server/paper-patches/features/0001-Region-Threading-Base.patch 215-219 
+The ensureTickThread method is useful for internal validation where you expect ownership and want to fail fast if the assumption is violated. 
+Safe Data Access Patterns 
+Sources : README.md 122-147 folia-server/paper-patches/features/0001-Region-Threading-Base.patch 306-360 
+Pattern 1: Check Ownership Before Access 
+Always verify thread ownership before accessing game state from event handlers or commands. 
+Pattern 2: Schedule to Correct Region 
+Use schedulers to ensure code runs on the thread owning the data. 
+Pattern 3: Async-to-Region Handoff 
+For operations that start async and need to access game state: 
+Start an async task via Bukkit.getAsyncScheduler().runNow(...) . 
+Perform I/O or heavy computation. 
+Schedule a follow-up task on the target entity or region's scheduler to apply changes. 
+Pattern 4: Cross-Region Communication 
+Never access entities/chunks from other regions directly. Instead, schedule tasks on the target's scheduler. 
+Concurrent Collections and Synchronization 
+Sources : README.md 139-147 folia-server/paper-patches/features/0001-Region-Threading-Base.patch 309-360 folia-server/paper-patches/features/0001-Region-Threading-Base.patch 499-577 
+What Requires Synchronization 
+Folia only makes game state thread-safe within each region . All plugin data is accessed from multiple region threads in parallel and requires explicit synchronization. 
+Data Type Synchronization Required Plugin configuration ✓ Player data maps (UUID → data) ✓ Global counters/statistics ✓ Cross-plugin APIs ✓ Cached data shared across events ✓ 
+Examples in Folia Codebase 
+ConcurrentHashMap : The ClickCallbackProviderImpl uses ConcurrentHashMap for callback storage accessed by multiple regions folia-server/paper-patches/features/0001-Region-Threading-Base.patch 312 
+Synchronized Blocks : The PaperPermissionManager uses synchronized blocks for permission operations folia-server/paper-patches/features/0001-Region-Threading-Base.patch 502-505 
+Atomic Operations : ClickCallbackProviderImpl uses computeIfPresent for atomic remove-if-invalid logic folia-server/paper-patches/features/0001-Region-Threading-Base.patch 342-351 
+Common Mistakes and How to Avoid Them 
+Sources : folia-server/paper-patches/features/0001-Region-Threading-Base.patch 473-480 README.md 115-121 
+Caching Entity References : Storing an Entity object and accessing it later from a different region thread will trigger a thread check violation. Always use UUIDs and re-fetch the entity or use the EntityScheduler . 
+Accessing Nearby Entities : Assuming all nearby entities returned by getNearbyEntities are in the same region is dangerous. Always schedule tasks on the specific entity's scheduler. 
+Sharing Non-Thread-Safe Collections : Using standard ArrayList or HashMap for data accessed across different regions will lead to ConcurrentModificationException or data corruption. 
+Assuming Event Ownership : While an event for a specific entity is called on that entity's region thread, other entities involved in the event (like a projectile's shooter) might belong to a different region. 
+Thread Check Implementation Details 
+Sources : folia-server/paper-patches/features/0001-Region-Threading-Base.patch 83-219 
+Understanding the "Code Entity Space" of thread checks: 
+Code-to-System Mapping 
+Diagram: Mapping Ownership Concepts to Code Entities 
+Internal Execution Flow 
+Diagram: Sequence of internal calls for TickThread validation folia-server/paper-patches/features/0001-Region-Threading-Base.patch 83-91 
+Key Implementation Components 
+Component Purpose TickRegionScheduler.getCurrentRegion() Returns the ThreadedRegion currently executing on this thread folia-server/paper-patches/features/0001-Region-Threading-Base.patch 85-86 ServerLevel.regioniser The ThreadedRegionizer managing regions for a world folia-server/paper-patches/features/0001-Region-Threading-Base.patch 90 regioniser.getRegionAtUnsynchronised(chunkX, chunkZ) Returns which region owns specific chunk coordinates folia-server/paper-patches/features/0001-Region-Threading-Base.patch 90 
+Special Cases Handled 
+Shutdown Thread : Access is permitted when the server is running the RegionShutdownThread folia-server/paper-patches/features/0001-Region-Threading-Base.patch 54-57 
+Global Tick Thread : Certain global states (like player login/config) are handled outside specific regions. 
+Internal Enforcement : Classes like PaperSchoolableFish use getHandle() to enforce that the entity is only accessed on its owning thread folia-server/paper-patches/features/0001-Region-Threading-Base.patch 473-480 
+Performance vs Safety Trade-offs 
+Sources : README.md 115-121 
+Folia prioritizes correctness over performance for thread safety. 
+Data corruption is worse than slowdown : Subtle threading bugs can corrupt server state in ways that are nearly impossible to debug README.md 124-128 
+Fail-fast prevents cascading issues : Immediate exceptions at the source of incorrect access prevent the error from propagating. 
+Checks will continue to increase : Folia will add more thread checks over time to ensure developers are using the API correctly, even if there is a minor performance penalty README.md 123-125 
+Summary: Thread Safety Checklist 
+When writing Folia-compatible plugins: 
+Mark plugin with folia-supported: true in plugin.yml README.md 112 
+Use Bukkit.isOwnedByCurrentRegion() to check thread ownership before accessing game state. 
+Use RegionScheduler for location-based tasks. 
+Use EntityScheduler for entity-specific tasks. 
+Use GlobalRegionScheduler for global operations. 
+Use AsyncScheduler for async work. 
+Protect plugin data with concurrent collections or synchronization README.md 143-147 
+Never access entity/chunk/block data from another region. 
+Assume ~8 chunk ownership radius from event sources (but verify) README.md 133-137 
+Sources : README.md 101-159 folia-server/paper-patches/features/0001-Region-Threading-Base.patch 1-200 Dismiss Refresh this wiki Enter email to refresh On this page Thread Safety Guidelines Core Principles Understanding Region Ownership Safe Access Radius Thread Ownership Verification APIs Bukkit API (Recommended for Plugins) TickThread Utility Methods Safe Data Access Patterns Pattern 1: Check Ownership Before Access Pattern 2: Schedule to Correct Region Pattern 3: Async-to-Region Handoff Pattern 4: Cross-Region Communication Concurrent Collections and Synchronization What Requires Synchronization Examples in Folia Codebase Common Mistakes and How to Avoid Them Thread Check Implementation Details Code-to-System Mapping Internal Execution Flow Key Implementation Components Special Cases Handled Performance vs Safety Trade-offs Summary: Thread Safety Checklist 

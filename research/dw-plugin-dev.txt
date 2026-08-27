@@ -1,0 +1,58 @@
+﻿ Plugin Development | PaperMC/Folia | DeepWiki Loading... Index your code with Devin DeepWiki DeepWiki PaperMC/Folia Index your code with Devin Edit Wiki Share Loading... Last indexed: 28 June 2026 ( 62dc0f ) Overview Project Architecture Installation & Setup Region Threading System Core Architecture Thread Safety and Ownership Region Lifecycle Data Isolation Chunk and Entity Management Task Scheduling Plugin Development Compatibility Requirements Scheduler APIs Thread Safety Guidelines Migration Guide Performance Monitoring Region Profiler TPS Monitoring Watchdog System Chunk System Metrics Building Folia Build Configuration Paperweight Patching System Build Scripts and Process Advanced Topics Block Update Thread Safety Login Concurrency Management Vehicle Position Synchronization Tile Entity Thread Safety Troubleshooting Glossary Menu Plugin Development 
+Relevant source files 
+PATCHES-LICENSE 
+PROJECT_DESCRIPTION.md 
+README.md 
+REGION_LOGIC.md 
+folia-api/paper-patches/features/0001-Force-disable-timings.patch 
+folia-api/paper-patches/features/0002-Region-scheduler-API.patch 
+folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 
+This page provides essential guidance for developers creating or adapting plugins for Folia's regionised multithreading architecture. Due to Folia's fundamental architectural changes from traditional Minecraft servers, plugin development requires a different approach to ensure proper functioning in a multithreaded environment. 
+SCOPING: This page has child pages 
+This is a PARENT page. The following child pages cover these topics in detail: 
+Compatibility Requirements — Explain the folia-supported flag requirement, plugin loading validation, and why plugins must declare compatibility. 
+Scheduler APIs — Document RegionScheduler , EntityScheduler , AsyncScheduler , GlobalRegionScheduler APIs and when to use each. 
+Thread Safety Guidelines — Provide best practices for plugin developers: avoiding data races, using Bukkit.isOwnedByCurrentRegion , and handling concurrent collections. 
+Migration Guide — Step-by-step guide for migrating plugins from Paper to Folia: replacing BukkitScheduler , using async APIs, and testing strategies. 
+Understanding the Folia Architecture for Plugin Developers 
+Folia's architecture divides the Minecraft world into independent regions, each running on its own thread. This represents a significant departure from traditional Minecraft servers, where all game logic runs on a single "main thread." There is no main thread anymore; each region effectively has its own "main thread" that executes the entire tick loop README.md 18-22 
+Threading Model Overview 
+Key Classes: 
+org.bukkit.Bukkit / org.bukkit.Server : Entry points for accessing schedulers. 
+io.papermc.paper.threadedregions.scheduler.RegionScheduler : Schedule tasks for specific locations folia-api/paper-patches/features/0002-Region-scheduler-API.patch 35-38 
+io.papermc.paper.threadedregions.scheduler.EntityScheduler : Schedule tasks for specific entities folia-api/paper-patches/features/0002-Region-scheduler-API.patch 35-38 
+io.papermc.paper.threadedregions.scheduler.AsyncScheduler : Schedule async tasks folia-api/paper-patches/features/0002-Region-scheduler-API.patch 35-38 
+io.papermc.paper.threadedregions.scheduler.GlobalRegionScheduler : Schedule global tasks folia-api/paper-patches/features/0002-Region-scheduler-API.patch 35-38 
+org.bukkit.scheduler.BukkitScheduler : Deprecated - do not use folia-api/paper-patches/features/0002-Region-scheduler-API.patch 41-42 
+Sources: README.md 18-22 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 25-42 
+Plugin Compatibility Requirements 
+Folia enforces explicit plugin compatibility. Only plugins explicitly marked by the author(s) to work with Folia will be loaded README.md 109-114 
+Plugin Loading Validation 
+Key Implementation: 
+PluginDescriptionFile.isFoliaSupported() : Checks for folia-supported: true in plugin.yml folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 42-52 
+PluginMeta.isFoliaSupported() : Interface method for plugin compatibility check folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 26-30 
+For details, see Compatibility Requirements . 
+Sources: README.md 109-114 folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 16-52 
+Thread Safety Fundamentals 
+Regions tick in parallel , not concurrently. They do not share data, and sharing data without proper context will cause corruption README.md 115-117 
+Thread Ownership Model 
+Rules for Developers: 
+Code running in one region cannot access data in another region README.md 118-120 
+Use Bukkit.isOwnedByCurrentRegion() to verify the thread context before access README.md 136-138 
+Use RegionScheduler or EntityScheduler to ensure code runs on the correct thread README.md 129-131 
+For details, see Thread Safety Guidelines . 
+Sources: README.md 115-131 README.md 136-138 
+The Scheduler API System 
+Folia replaces the single-threaded BukkitScheduler with specialized schedulers that target specific execution contexts folia-api/paper-patches/features/0002-Region-scheduler-API.patch 4-7 
+Scheduler Selection 
+Scheduler Use Case RegionScheduler Tasks for a specific world location (chunk/location) EntityScheduler Tasks for a specific entity GlobalRegionScheduler Tasks that affect the whole server or no specific region AsyncScheduler Tasks that do not access game state (I/O, networking) 
+Note: The legacy BukkitScheduler is deprecated and its sync methods are largely non-functional in Folia's environment folia-api/paper-patches/features/0002-Region-scheduler-API.patch 34-42 
+For details, see Scheduler APIs . 
+Sources: folia-api/paper-patches/features/0002-Region-scheduler-API.patch 4-42 
+Migration Path 
+Migrating from Paper to Folia requires replacing all BukkitScheduler logic and auditing every block of code that accesses entities or chunks. 
+Replace Schedulers: Transition from BukkitScheduler to the new regional/entity/async schedulers folia-api/paper-patches/features/0002-Region-scheduler-API.patch 34-42 
+Handle Events: Be aware that events fire on the region thread owning the location/entity involved README.md 133-135 
+Disable Timings: Legacy timings are disabled; you must use the new region profiler folia-api/paper-patches/features/0001-Force-disable-timings.patch 15-16 
+For details, see Migration Guide . 
+Sources: README.md 133-135 folia-api/paper-patches/features/0001-Force-disable-timings.patch 15-16 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 34-42 Dismiss Refresh this wiki Enter email to refresh On this page Plugin Development SCOPING: This page has child pages Understanding the Folia Architecture for Plugin Developers Threading Model Overview Plugin Compatibility Requirements Plugin Loading Validation Thread Safety Fundamentals Thread Ownership Model The Scheduler API System Scheduler Selection Migration Path 

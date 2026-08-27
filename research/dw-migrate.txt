@@ -1,0 +1,49 @@
+﻿ Migration Guide | PaperMC/Folia | DeepWiki Loading... Index your code with Devin DeepWiki DeepWiki PaperMC/Folia Index your code with Devin Edit Wiki Share Loading... Last indexed: 28 June 2026 ( 62dc0f ) Overview Project Architecture Installation & Setup Region Threading System Core Architecture Thread Safety and Ownership Region Lifecycle Data Isolation Chunk and Entity Management Task Scheduling Plugin Development Compatibility Requirements Scheduler APIs Thread Safety Guidelines Migration Guide Performance Monitoring Region Profiler TPS Monitoring Watchdog System Chunk System Metrics Building Folia Build Configuration Paperweight Patching System Build Scripts and Process Advanced Topics Block Update Thread Safety Login Concurrency Management Vehicle Position Synchronization Tile Entity Thread Safety Troubleshooting Glossary Menu Migration Guide 
+Relevant source files 
+PATCHES-LICENSE 
+PROJECT_DESCRIPTION.md 
+README.md 
+REGION_LOGIC.md 
+folia-api/paper-patches/features/0001-Force-disable-timings.patch 
+folia-api/paper-patches/features/0002-Region-scheduler-API.patch 
+folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 
+This guide provides a comprehensive walkthrough for migrating existing Paper plugins to be compatible with Folia's region-based multithreading architecture. Due to fundamental architectural changes in Folia, virtually all existing Paper plugins will require modifications to function correctly. 
+Understanding the Migration Challenge 
+Folia fundamentally changes Minecraft server architecture by replacing the traditional single-threaded "main thread" model with a region-based parallel processing system. This architectural shift necessitates significant changes to how plugins interact with the server. 
+Architecture Transition: Paper vs Folia 
+Sources: README.md 13-31 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 6-8 
+Required Changes for Folia Compatibility 
+1. Declare Folia Support in plugin.yml 
+Before any plugin will load on Folia, it must explicitly declare compatibility. Folia introduces a mandatory check in the plugin configuration to prevent accidental data corruption from incompatible plugins. 
+The server implementation of PluginDescriptionFile now looks for the folia-supported key. If this is missing or set to false, the server will refuse to load the plugin. 
+Sources: README.md 109-114 folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 42-53 
+2. Replace BukkitScheduler Usage 
+The traditional BukkitScheduler is deprecated in Folia because it assumes a single main thread. You must migrate to one of the four new specialized schedulers. 
+Scheduler Selection Logic 
+Scheduler Migration Table 
+BukkitScheduler Method Folia Replacement Notes runTask() RegionScheduler.execute() or EntityScheduler.execute() For location or entity-specific tasks runTaskLater() RegionScheduler.runDelayed() For delayed tasks on a specific location runTaskTimer() RegionScheduler.runAtFixedRate() For repeating tasks runTaskAsynchronously() AsyncScheduler.runNow() Replaces BukkitScheduler#runTaskAsynchronously cancelTasks(plugin) AsyncScheduler.cancelTasks(plugin) The SimplePluginManager now uses getAsyncScheduler() for cleanup 
+Sources: folia-api/paper-patches/features/0002-Region-scheduler-API.patch 25-42 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 9-24 README.md 94-105 
+3. Adapt to Thread Safety Requirements 
+In Folia, regions tick in parallel , not just concurrently. Code running in one region must not directly access or modify data in another region. 
+Thread Context Rules 
+Parallelism: Different regions run on different threads simultaneously. 
+Isolation: Regions do not share data (entities, chunks, POI) and do not expect to share data. 
+Ownership: A single region "owns" the data for its assigned chunks. If that region is ticking, it has full access to that data. 
+Thread Ownership Checking 
+Plugins should use the thread-check API to ensure they are on the correct region thread before performing operations on world data. 
+Sources: README.md 115-132 README.md 139-144 
+4. Replace Synchronous Entity Operations 
+Certain operations that were previously synchronous are now strictly asynchronous or prohibited. 
+Teleportation: Use Entity#teleportAsync instead of the synchronous teleport method. 
+Timings: The Aikar Timings system is force-disabled in Folia, as it is incompatible with region threading. It has been replaced by a new profiler system. 
+Sources: README.md 186-187 folia-api/paper-patches/features/0001-Force-disable-timings.patch 15-19 
+Common Plugin Data Structures and Threading 
+When migrating, you must evaluate how your plugin stores data. Since different regions will call your listeners/commands in parallel, standard collections like HashMap or ArrayList will cause race conditions if shared globally. 
+Data Type Migration Strategy Plugin-wide state Use ConcurrentHashMap or Atomic types. Player-specific data Access only when the player's region thread is active (via EntityScheduler ). Spatial data Use RegionScheduler to ensure tasks run in the region owning the coordinates. 
+Sources: README.md 145-152 
+Testing Your Migration 
+Region Boundaries: Test actions that occur near or across region boundaries (approx. 8 chunks from the source). 
+Concurrency Stress: Use multiple players in different regions to ensure your global data structures (like scoreboards or custom caches) are thread-safe. 
+Watchdog Monitoring: Monitor the console for "Thread check failure" or "IllegalStateException". Folia is designed to "fail hard" when a bad access occurs to prevent data corruption. 
+Sources: README.md 121-127 README.md 133-138 Dismiss Refresh this wiki Enter email to refresh On this page Migration Guide Understanding the Migration Challenge Architecture Transition: Paper vs Folia Required Changes for Folia Compatibility 1. Declare Folia Support in plugin.yml 2. Replace BukkitScheduler Usage Scheduler Selection Logic Scheduler Migration Table 3. Adapt to Thread Safety Requirements Thread Context Rules Thread Ownership Checking 4. Replace Synchronous Entity Operations Common Plugin Data Structures and Threading Testing Your Migration 
+

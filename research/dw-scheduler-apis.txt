@@ -1,0 +1,74 @@
+﻿ Scheduler APIs | PaperMC/Folia | DeepWiki Loading... Index your code with Devin DeepWiki DeepWiki PaperMC/Folia Index your code with Devin Edit Wiki Share Loading... Last indexed: 28 June 2026 ( 62dc0f ) Overview Project Architecture Installation & Setup Region Threading System Core Architecture Thread Safety and Ownership Region Lifecycle Data Isolation Chunk and Entity Management Task Scheduling Plugin Development Compatibility Requirements Scheduler APIs Thread Safety Guidelines Migration Guide Performance Monitoring Region Profiler TPS Monitoring Watchdog System Chunk System Metrics Building Folia Build Configuration Paperweight Patching System Build Scripts and Process Advanced Topics Block Update Thread Safety Login Concurrency Management Vehicle Position Synchronization Tile Entity Thread Safety Troubleshooting Glossary Menu Scheduler APIs 
+Relevant source files 
+PATCHES-LICENSE 
+PROJECT_DESCRIPTION.md 
+README.md 
+REGION_LOGIC.md 
+folia-api/paper-patches/features/0001-Force-disable-timings.patch 
+folia-api/paper-patches/features/0002-Region-scheduler-API.patch 
+folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 
+Purpose and Scope 
+This page documents the new scheduler APIs introduced by Folia to replace the single-threaded BukkitScheduler . These APIs ensure tasks execute on the correct thread context in Folia's regionized multithreading environment. 
+For information about the folia-supported flag requirement, see 3.1 Compatibility Requirements For understanding thread safety principles when using these schedulers, see 3.3 Thread Safety Guidelines For practical migration guidance from BukkitScheduler to the new schedulers, see 3.4 Migration Guide 
+Sources: README.md 82-157 folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 26-31 
+Overview 
+Folia has no main thread. Instead, each region has its own tick loop executing at 20 TPS in parallel README.md 18-22 The traditional BukkitScheduler API, which assumes a single main thread, cannot function in this environment and is deprecated folia-api/paper-patches/features/0002-Region-scheduler-API.patch 33-41 Folia introduces four specialized scheduler types: 
+Scheduler Thread Context Retrieval Method Use Case RegionScheduler Region owning a location Bukkit.getRegionScheduler() Tasks tied to a world location EntityScheduler Region owning an entity Entity#getScheduler() Tasks tied to a specific entity AsyncScheduler Thread pool (off-region) Bukkit.getAsyncScheduler() True async operations GlobalRegionScheduler Global region thread Bukkit.getGlobalRegionScheduler() Server-wide operations 
+Sources: README.md 88-96 README.md 154-157 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 6-7 
+Scheduler Architecture 
+This diagram bridges the natural language scheduling requests to the specific Folia code entities and execution threads. 
+Sources: README.md 88-96 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 1-45 
+RegionScheduler 
+Purpose 
+RegionScheduler schedules tasks to execute on the region tick thread that owns a specific location README.md 95-97 This is the primary scheduler for location-based game logic. 
+API Methods 
+The RegionScheduler interface provides location-based task scheduling: 
+run(Plugin, Location, Consumer<ScheduledTask>) 
+runDelayed(Plugin, Location, Consumer<ScheduledTask>, long delayTicks) 
+runAtFixedRate(Plugin, Location, Consumer<ScheduledTask>, long initialDelayTicks, long periodTicks) 
+Thread Context 
+Tasks execute on the region tick thread currently owning the specified location. If the location is not loaded, the task will not execute until the region becomes available README.md 133-137 
+Sources: README.md 88-96 README.md 154-157 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 6-7 
+EntityScheduler 
+Purpose 
+EntityScheduler schedules tasks to execute on the region tick thread that owns a specific entity README.md 95-97 This scheduler follows the entity as it moves between regions. 
+API Methods 
+Retrieved via Entity#getScheduler() . Methods include: 
+run(Plugin, Consumer<ScheduledTask>, Runnable retired) 
+runDelayed(Plugin, Consumer<ScheduledTask>, Runnable retired, long delayTicks) 
+runAtFixedRate(Plugin, Consumer<ScheduledTask>, Runnable retired, long initialDelayTicks, long periodTicks) 
+The retired callback executes if the entity is removed (e.g., despawned) before the task runs. 
+Thread Context 
+Tasks execute on whichever region tick thread currently owns the entity. As entities move between regions, scheduled tasks automatically transfer to the new region's thread. 
+Sources: README.md 88-96 README.md 154-157 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 6-7 
+AsyncScheduler 
+Purpose 
+AsyncScheduler provides true asynchronous execution off the region tick threads. This is the only scheduler for operations that must not block region ticks, such as I/O or database access README.md 54-60 
+API Methods 
+Retrieved via Bukkit.getAsyncScheduler() . 
+runNow(Plugin, Consumer<ScheduledTask>) 
+runDelayed(Plugin, Consumer<ScheduledTask>, long delay, TimeUnit unit) 
+runAtFixedRate(Plugin, Consumer<ScheduledTask>, long initialDelay, long period, TimeUnit unit) 
+Plugin Cleanup 
+When plugins are disabled, the AsyncScheduler cancels pending async tasks to prevent leaks:
+folia-api/paper-patches/features/0002-Region-scheduler-API.patch 17-23 
+Sources: README.md 88-96 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 9-24 
+GlobalRegionScheduler 
+Purpose 
+GlobalRegionScheduler schedules tasks to execute on the global region tick thread. This thread handles server-wide operations that do not belong to any specific world region, such as console commands README.md 167-169 
+API Methods 
+Retrieved via Bukkit.getGlobalRegionScheduler() . 
+run(Plugin, Consumer<ScheduledTask>) 
+runDelayed(Plugin, Consumer<ScheduledTask>, long delayTicks) 
+runAtFixedRate(Plugin, Consumer<ScheduledTask>, long initialDelayTicks, long periodTicks) 
+Sources: README.md 88-96 README.md 154-157 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 6-7 
+Thread Context Flow 
+This diagram illustrates how a task scheduled via RegionScheduler flows through the system to ensure safe data access. 
+Sources: README.md 122-131 README.md 166-177 
+BukkitScheduler Deprecation 
+The BukkitScheduler interface is marked @Deprecated in Folia folia-api/paper-patches/features/0002-Region-scheduler-API.patch 33-41 
+Replacement Mapping 
+BukkitScheduler Method Folia Replacement runTask() RegionScheduler.run() (Location-based) runTask() EntityScheduler.run() (Entity-based) runTask() GlobalRegionScheduler.run() (Global) runTaskAsynchronously() AsyncScheduler.runNow() runTaskLater() [Type]Scheduler.runDelayed() runTaskTimer() [Type]Scheduler.runAtFixedRate() 
+Why Deprecation is Necessary 
+The BukkitScheduler API assumes a single main thread and that all "sync" tasks can safely access all game data. In Folia, regions tick in parallel, and data is isolated README.md 115-121 Accessing data from the wrong region thread will result in an IllegalStateException README.md 126-128 
+Sources: README.md 88-96 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 25-42 Dismiss Refresh this wiki Enter email to refresh On this page Scheduler APIs Purpose and Scope Overview Scheduler Architecture RegionScheduler Purpose API Methods Thread Context EntityScheduler Purpose API Methods Thread Context AsyncScheduler Purpose API Methods Plugin Cleanup GlobalRegionScheduler Purpose API Methods Thread Context Flow BukkitScheduler Deprecation Replacement Mapping Why Deprecation is Necessary 

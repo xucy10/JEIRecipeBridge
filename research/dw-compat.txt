@@ -1,0 +1,50 @@
+﻿ Compatibility Requirements | PaperMC/Folia | DeepWiki Loading... Index your code with Devin DeepWiki DeepWiki PaperMC/Folia Index your code with Devin Edit Wiki Share Loading... Last indexed: 28 June 2026 ( 62dc0f ) Overview Project Architecture Installation & Setup Region Threading System Core Architecture Thread Safety and Ownership Region Lifecycle Data Isolation Chunk and Entity Management Task Scheduling Plugin Development Compatibility Requirements Scheduler APIs Thread Safety Guidelines Migration Guide Performance Monitoring Region Profiler TPS Monitoring Watchdog System Chunk System Metrics Building Folia Build Configuration Paperweight Patching System Build Scripts and Process Advanced Topics Block Update Thread Safety Login Concurrency Management Vehicle Position Synchronization Tile Entity Thread Safety Troubleshooting Glossary Menu Compatibility Requirements 
+Relevant source files 
+folia-api/paper-patches/features/0001-Force-disable-timings.patch 
+folia-api/paper-patches/features/0002-Region-scheduler-API.patch 
+folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 
+folia-server/paper-patches/features/0001-Region-Threading-Base.patch 
+This document explains the strict compatibility requirements that plugins must meet to run on Folia. Folia's regionised multithreading architecture is fundamentally incompatible with traditional plugins, requiring explicit developer acknowledgment before plugins can be loaded. 
+The folia-supported Flag 
+Folia enforces a mandatory compatibility declaration to prevent loading incompatible plugins. This requirement is implemented through a folia-supported flag in the plugin's metadata. 
+Rationale 
+Folia represents a major architectural breakage from Paper's single-threaded model. The vast majority of existing plugins will not function correctly on Folia without modification. To prevent user confusion from cryptic errors caused by incompatible plugins, Folia refuses to load any plugin that has not been explicitly marked as compatible. 
+Sources: folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 1-14 
+Adding the Flag to plugin.yml 
+To declare Folia compatibility, add the following line to your plugin's plugin.yml file: 
+The flag is parsed as a string and checked case-insensitively. Only the string "true" will mark the plugin as compatible. 
+Sources: folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 42-53 
+Plugin Loading Validation 
+The server validates this flag during the plugin discovery and loading phase. 
+Plugin Loading Flow 
+Sources: folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 16-32 folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 57-66 
+Implementation Details 
+The compatibility checking system is implemented through modifications to Paper's plugin metadata system: 
+Code Entity Mapping 
+Sources: folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 16-81 
+The isFoliaSupported() method performs a case-insensitive string comparison: 
+Sources: folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 48-53 
+Deprecated and Disabled Systems 
+BukkitScheduler Deprecation 
+The traditional BukkitScheduler is marked as @Deprecated in Folia. Developers are directed to use the new region-aware schedulers. 
+Sources: folia-api/paper-patches/features/0002-Region-scheduler-API.patch 33-42 
+Timings Disablement 
+The legacy Timings system is force-disabled in Folia because it is not compatible with region-threaded profiling. Timings.setTimingsEnabled(boolean) is patched to always set the state to false . 
+Sources: folia-api/paper-patches/features/0001-Force-disable-timings.patch 8-20 
+Thread Ownership Enforcement 
+Folia enforces thread safety through ownership checks. If a plugin attempts to access world data (blocks, entities, chunks) from the wrong thread, the server will often throw an IllegalStateException . 
+Context Verification 
+The TickThread utility class provides methods to verify if the current thread owns a specific location or entity. 
+Method Purpose isTickThreadFor(Level, BlockPos) Checks if current thread owns the region containing the position isTickThreadFor(Entity) Checks if current thread owns the region containing the entity isShutdownThread() Identifies if the thread is the RegionShutdownThread 
+Sources: folia-server/paper-patches/features/0001-Region-Threading-Base.patch 54-91 
+Thread Context Logic 
+The server determines ownership by checking the ThreadedRegion associated with the current thread via TickRegionScheduler.getCurrentRegion() . 
+Sources: folia-server/paper-patches/features/0001-Region-Threading-Base.patch 83-91 folia-server/paper-patches/features/0001-Region-Threading-Base.patch 127-151 
+Compatibility Checklist for Developers 
+Declaring folia-supported: true is a contract that the developer has: 
+Migrated Schedulers : Replaced BukkitScheduler with RegionScheduler , EntityScheduler , AsyncScheduler , or GlobalRegionScheduler . 
+Handled Threading : Ensured that all entity/block interactions occur on the correct region thread. 
+Validated Thread Safety : Used TickThread or Bukkit's ownership APIs to verify context where necessary. 
+Acknowledged API Changes : Adjusted to the fact that legacy systems like Timings are disabled. 
+Sources: folia-api/paper-patches/features/0003-Require-plugins-to-be-explicitly-marked-as-Folia-sup.patch 1-14 folia-api/paper-patches/features/0002-Region-scheduler-API.patch 33-42 Dismiss Refresh this wiki Enter email to refresh On this page Compatibility Requirements The folia-supported Flag Rationale Adding the Flag to plugin.yml Plugin Loading Validation Implementation Details Deprecated and Disabled Systems BukkitScheduler Deprecation Timings Disablement Thread Ownership Enforcement Context Verification Thread Context Logic Compatibility Checklist for Developers 
+

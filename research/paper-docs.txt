@@ -1,0 +1,49 @@
+﻿ Supporting Paper and Folia | PaperMC Docs Skip to content PaperMC Docs Search Ctrl K Cancel GitHub Javadoc Discord Select theme Dark Light Auto Paper Paper Velocity Folia Adventure Waterfall Miscellaneous Administration Getting started Getting started Adding plugins Migrating to or from Paper Next steps How-to guides Aikar&#39;s flags Configuring Anti-Xray Basic troubleshooting Profiling Updating Vanilla-like experience Reference Configuration Configuration Global configuration World configuration bukkit.yml spigot.yml commands.yml permissions.yml help.yml server.properties Vanilla data files Paper plugins Commands System properties CLI Arguments Permissions Miscellaneous Update checker Bug fixes Frequently asked questions Development Getting started Project setup How plugins work Paper plugins Experimental plugin.yml paperweight-userdev API Command API Basics Introduction Command trees Arguments and literals Executors Registration Requirements Suggestions Custom arguments Arguments Minecraft-specific Location Entities and players Registry Paper-specific Enums Predicates Adventure Miscellaneous Basic commands Comparison Component API Introduction Internationalization Audiences Signed messages Event API Listeners Custom events Handler lists Chat events Entity API Teleportation Display entities Mob Goal API Entity Pathfinder API Inventories Menu Type API Custom InventoryHolders Lifecycle API Introduction Datapack discovery Experimental Data components Persistent data container (PDC) Scheduling Plugin messaging Plugin configuration Registries Experimental Dialog API Recipes Particles Supporting Paper and Folia Roadmap Miscellaneous Using databases Debugging your plugin Minecraft internals Reading stacktraces Contributing Events GitHub Javadoc Discord Select theme Dark Light Auto On this page Overview Schedulers Global scheduler Region scheduler Async scheduler Entity scheduler On this page Overview Schedulers Global scheduler Region scheduler Async scheduler Entity scheduler Supporting Paper and Folia 
+Folia is a fork of Paper, which is currently maintained by the PaperMC team.
+It adds the ability to split the world into regions as outlined here in more depth. 
+Mark plugin as supported on Folia Section titled “Mark plugin as supported on Folia” 
+Plugins can’t run on Folia if you don’t have this field in your paper-plugin.yml (or plugin.yml, respectively): 
+folia-supported : true 
+Danger Marking a plugin as supported on Folia is not nearly enough to support Folia.
+You must specially develop your plugin with the intent of supporting Folia, keeping things mentioned on this page in mind. 
+Checking for Folia Section titled “Checking for Folia” 
+Depending on what platform your plugin is running on, you may need to implement features differently. For this, you can
+use this utility method to check if the current server is running Folia: 
+private static boolean isFolia () { return ServerBuildInfo . buildInfo () . isBrandCompatible ( Key . key ( " papermc " , " folia " )) ; } 
+Schedulers Section titled “Schedulers” 
+In order to support Paper and Folia, you must use the correct scheduler. Folia has different types of schedulers
+that can be used for different things. They are: 
+Global 
+Region 
+Async 
+Entity 
+If you use these schedulers when running Paper, they will be internally handled to provide the same functionality as if you were
+running Folia. 
+Global scheduler Section titled “Global scheduler” 
+The tasks that you run on the global scheduler will be executed on the global region, see here for
+more information. You should use this scheduler for any tasks that do not belong to any particular region. These can be fetched with: 
+GlobalRegionScheduler globalScheduler = server . getGlobalRegionScheduler () ; 
+Region scheduler Section titled “Region scheduler” 
+The region scheduler will be in charge of running tasks for the region that owns a certain location. Do not use this scheduler for
+operations on entities, as this scheduler is tied to the region. Each entity has its own scheduler 
+which will follow it across regions. As an example, let’s say I want to set a block to a beehive: 
+Location locationToChange = ...; RegionScheduler scheduler = server . getRegionScheduler () ; 
+scheduler . execute ( plugin, locationToChange, () -> { locationToChange . getBlock () . setType ( Material . BEEHIVE ) ; } ) ; { locationToChange.getBlock().setType(Material.BEEHIVE);});"> 
+We pass the location as a parameter to the RegionScheduler 
+as it needs to work out which region to execute on. 
+Async scheduler Section titled “Async scheduler” 
+The async scheduler can be used for running tasks independent of the server tick process. This can be fetched with: 
+AsyncScheduler asyncScheduler = server . getAsyncScheduler () ; 
+Entity scheduler Section titled “Entity scheduler” 
+Entity schedulers are used for executing tasks on an entity. These will follow the entity wherever it goes, so you must use
+these instead of the region schedulers. 
+EntityScheduler scheduler = entity . getScheduler () ; Edit page 
+Last updated:
+Aug 6, 2026 
+by Warrior 
+in 1bd994b Previous Particles Next Roadmap 
+Copyright © 2026 PaperMC and contributors. Built with Starlight .
+This website is not an official Minecraft website and is not associated with Mojang Studios or Microsoft. All
+product and company names are trademarks or registered trademarks of their respective holders. Use of these names
+does not imply any affiliation or endorsement by them.
+

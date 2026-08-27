@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <groupId>dev.folia</groupId>
+  <artifactId>folia-api</artifactId>
+  <versioning>
+    <latest>26.2.build.7-beta</latest>
+    <release>26.2.build.7-beta</release>
+    <versions>
+      <version>1.19.4-R0.1-SNAPSHOT</version>
+      <version>1.20.1-R0.1-SNAPSHOT</version>
+      <version>1.20.2-R0.1-SNAPSHOT</version>
+      <version>1.20.4-R0.1-SNAPSHOT</version>
+      <version>1.20.6-R0.1-SNAPSHOT</version>
+      <version>1.21.4-R0.1-SNAPSHOT</version>
+      <version>1.21.5-R0.1-SNAPSHOT</version>
+      <version>1.21.6-R0.1-SNAPSHOT</version>
+      <version>1.21.8-R0.1-SNAPSHOT</version>
+      <version>1.21.11-R0.1-SNAPSHOT</version>
+      <version>26.1.2.build.8-stable</version>
+      <version>26.2.build.1-beta</version>
+      <version>26.2.build.3-beta</version>
+      <version>26.2.build.4-beta</version>
+      <version>26.2.build.5-beta</version>
+      <version>26.2.build.6-beta</version>
+      <version>26.2.build.7-beta</version>
+    </versions>
+    <lastUpdated>20260825133551</lastUpdated>
+  </versioning>
+</metadata>
+
